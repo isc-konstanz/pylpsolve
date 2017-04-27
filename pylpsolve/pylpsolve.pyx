@@ -23,7 +23,7 @@ from numpy cimport ndarray as ar, \
 
 cimport cython
 
-from numpy import int32,uint32,int64, uint64, float32, float64,\
+from numpy import int32, uint32, int64, uint64, float32, float64,\
     uint, empty, ones, zeros, uint, arange, isscalar, amax, amin, \
     ndarray, array, asarray, isfinite, argsort
 
@@ -51,41 +51,27 @@ ctypedef double real
 # cdef object spfind   = sp.find     if sparse_supported else None
 
 
-##############################
-# This is how it should work
-#from typechecks cimport *
-
-#This works
-
 ############################################################
 # Miscilaneous utility functions for resolving types
 
-from types import IntType, LongType, FloatType
-from numpy import isscalar
-
 cdef inline isnumeric(v):
-    t_v = type(v)
-
-    global IntType
     
-    if (t_v is IntType
-        or t_v is LongType
-        or t_v is FloatType):
+    if (isinstance(v, int) or
+        isinstance(v, long) or
+        isinstance(v, float)):
         return True
     else:
         return isscalar(v)
 
 cdef inline isposint(v):
-    t_v = type(v)
 
-    if (t_v is IntType or t_v is LongType) and v >= 0:
+    if (isinstance(v, int) or isinstance(v, long)) and v >= 0:
         return True
 
 
 cdef inline bint issize(v):
-    t_v = type(v)
 
-    if (t_v is IntType or t_v is LongType) and v >= 1:
+    if (isinstance(v, int) or isinstance(v, long)) and v >= 1:
         return True
 
 cdef inline bint istuplelist(list l):
@@ -294,9 +280,14 @@ cdef extern from "lp_solve_5.5/lp_lib.h":
     void set_pivoting(lprec*, int rule)
     void set_sense(lprec *lp, bint maximize)
     
+    # tolerance
+    void set_mip_gap(lprec *lp, unsigned char absolute, real mip_gap)
+    
     int solve(lprec *lp)
 
     int print_lp(lprec *lp)
+    
+    void set_timeout(lprec *lp, long sectimeout)
     
     void set_verbose(lprec*, int)
 
@@ -2350,6 +2341,12 @@ cdef class LP(object):
             assert start_basis.shape[0] in [full_basis_size, basic_basis_size]
             set_basis(self.lp, <int*>start_basis.data, start_basis.shape[0] == full_basis_size)
 
+        if "tolerance" in option_dict and option_dict["tolerance"] is not None:
+            set_mip_gap(self.lp, True, option_dict["tolerance"])
+
+        if "timeout" in option_dict and option_dict["timeout"] is not None:
+            set_timeout(self.lp, option_dict["timeout"])
+
         ####################
         # Clear out all the temporary stuff 
         self._clear(True)
@@ -2471,7 +2468,7 @@ cdef class LP(object):
 
         # Make sure that the options given are all valid
         cdef set okay_options = set(option_dict.iterkeys())
-        okay_options |= set(["basis", "guess"])
+        okay_options |= set(["basis", "guess", "timeout", "tolerance"])
 
         cdef str k, k1
 
@@ -2483,14 +2480,14 @@ cdef class LP(object):
 
             option_dict[kl] = v
 
-        
+
         ########################################
         # Set up the LP
-        
+
         self.setupLP(option_dict)
 
         cdef int ret = solve(self.lp)
-        
+
         ########################################
         # Check the error codes
 
@@ -2549,7 +2546,7 @@ cdef class LP(object):
             # FEASFOUND (12)    A feasible B&B solution was found
             return 
         elif ret == 13:
-             # NOFEASFOUND (13)         No feasible B&B solution found
+            # NOFEASFOUND (13)         No feasible B&B solution found
             raise LPException("Error 13: No feasible B&B solution found")
         raise LPException("Error {}: Unknown error!".format(ret))
 
@@ -2906,9 +2903,10 @@ cdef struct _Constraint:
     # Dealing with the indices; if index_range_mode is true, then the
     # indices refer to a range rather than individual indices
     int *indices
-    int index_range_start  # the first index of the length n block
-                           # that is the indices. Negative -> not
-                           # used.
+    
+    # the first index of the length n block
+    # that is the indices. Negative -> not used
+    int index_range_start
 
     # The values
     double *values

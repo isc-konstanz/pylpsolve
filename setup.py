@@ -20,18 +20,25 @@
 ################################################################################
 # All the control parameters should go here
 
-debug_mode_c_code = False
+import os
+import sys
+from glob import glob
+from itertools import chain
 
-version = "0.1"
-description="PyLPSolve: Object-oriented wrapper for the lpsolve linear programming solver."
-author = "Hoyt Koepke"
-author_email="hoytak@gmail.com"
-name = 'pylpsolve'
-scripts = []
-url = ""
-download_url = ""
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+    
+from distutils.extension import Extension
 
-long_description = \
+
+VERSION = "0.2.0"
+
+NAME = 'pylpsolve'
+DESCRIPTION = "PyLPSolve: Object-oriented wrapper for the lpsolve linear programming solver."
+
+DESCRIPTION_LONG = \
 """
 PyLPSolve is an object oriented wrapper for the open source LP solver
 lpsolve.  The focus is on usability and integration with existing
@@ -54,7 +61,13 @@ wrapper library is licensed under the liberal BSD license to encourage
 reuse with other LP solvers.
 """
 
-classifiers = [
+AUTHOR = "Hoyt Koepke"
+AUTHOR_EMAIL = "hoytak@gmail.com"
+SCRIPTS = []
+URL = ""
+URL_DOWNLOAD = ""
+
+CLASSIFIERS = [
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: BSD',
@@ -63,29 +76,19 @@ classifiers = [
     'Operating System :: POSIX',
     'Programming Language :: Python',
     'Programming Language :: Cython',
-    'Programming Language :: C',
-    ]
+    'Programming Language :: C'
+]
 
-numpy_needed = True
+DEBUG_C = False
 
-source_directory_list = ['pylpsolve']
+NUMPY = True
 
-lpsolve_base = 'pylpsolve/lp_solve_5.5'
+SOURCE_DIR = ['pylpsolve']
 
-# Stuff for extension module stuff
-compiler_args = ['-O3', '-DYY_NEVER_INTERACTIVE','-DPARSER_LP', '-DINVERSE_ACTIVE=INVERSE_LUSOL', '-DRoleIsExternalInvEngine']
-link_args = ['-O3']
+LPSOLVE_BASE = 'pylpsolve/lp_solve_5.5'
 
-from glob import glob
-from os.path import join
-
-extra_library_dirs = []
-extra_include_dirs = [join(lpsolve_base, d) for d in ['.', 'shared', 'bfp', 'bfp/bfp_LUSOL', 'bfp/bfp_LUSOL/LUSOL', 'colamd']]
-
-library_includes = []
-specific_libraries = {}
-
-extra_sources = {'pylpsolve.pylpsolve' : [join(lpsolve_base, f) for f in 
+# Stuff for extension modules
+SOURCES_EXTRA = {'pylpsolve.pylpsolve' : [os.path.join(LPSOLVE_BASE, f) for f in 
                                           ['lp_MDO.c', 'shared/commonlib.c', 'shared/mmio.c', 'shared/myblas.c', 
                                            'ini.c', 'fortify.c', 'colamd/colamd.c', 'lp_rlp.c', 'lp_crash.c', 
                                            'bfp/bfp_LUSOL/lp_LUSOL.c', 'bfp/bfp_LUSOL/LUSOL/lusol.c', 'lp_Hash.c', 
@@ -93,26 +96,22 @@ extra_sources = {'pylpsolve.pylpsolve' : [join(lpsolve_base, f) for f in
                                            'lp_presolve.c', 'lp_price.c', 'lp_pricePSE.c', 'lp_report.c', 'lp_scale.c', 
                                            'lp_simplex.c', 'lp_SOS.c', 'lp_utils.c', 'yacc_read.c']]}
 
+COMPILER_ARGS = ['-O3', '-DYY_NEVER_INTERACTIVE','-DPARSER_LP', '-DINVERSE_ACTIVE=INVERSE_LUSOL', '-DRoleIsExternalInvEngine']
+LINK_ARGS = ['-O3']
 
-################################################################################
-# Shouldn't have to adjust anything below this line...
+include_dirs_extra = [os.path.join(LPSOLVE_BASE, d) for d in ['.', 'shared', 'bfp', 'bfp/bfp_LUSOL', 'bfp/bfp_LUSOL/LUSOL', 'colamd']]
+library_dirs_extra = []
 
-import os
-from os.path import split, join
-from itertools import chain
-import sys
+library_includes = []
+library_specific = {}
 
-from distutils.core import setup
-from distutils.extension import Extension
 
-if numpy_needed:
+if NUMPY:
     import numpy
-    extra_include_dirs.append(numpy.get_include())
+    include_dirs_extra.append(numpy.get_include())
 
-######################################################
-# First have to see if we're authorized to use cython files, or if we
-# should instead compile the included files
 
+# First, see if we're authorized to use cython files, or if we should instead compile the included files
 if "--cython" in sys.argv:
     cython_mode = True
     del sys.argv[sys.argv.index("--cython")]
@@ -121,20 +120,18 @@ else:
 
 # Get all the cython files in the sub directories and in this directory
 if cython_mode:
-    cython_files = dict( (d, glob(join(d, "*.pyx"))) for d in source_directory_list + ['.'])
+    cython_files = dict( (d, glob(os.path.join(d, "*.pyx"))) for d in SOURCE_DIR + ['.'])
 else:
     cython_files = {}
 
-all_cython_files = set(chain(*cython_files.values()))
-
-print "+++++++++++++++++++"
+cython_files_all = set(chain(*cython_files.values()))
 
 if cython_mode:
-    print "Cython Files Found: \n%s\n+++++++++++++++++++++" % ", ".join(sorted(all_cython_files))
+    print("Cython Files Found: \n%s" % ", ".join(sorted(cython_files_all)))
 else:
-    print "Cython support disabled; compiling extensions from pregenerated C sources."
-    print "To enable cython, run setup.py with the option --cython."
-    print "+++++++++++++++++++"
+    print("Cython support disabled; compiling extensions from pregenerated C sources.")
+    print("To enable cython, run setup.py with the option --cython.")
+
 
 # Set the compiler arguments -- Add in the environment path stuff
 ld_library_path = os.getenv("LD_LIBRARY_PATH")
@@ -150,107 +147,101 @@ if include_path is not None:
 else:
     include_paths = []
 
-
 # get all the c files that are not cythonized .pyx files.
-c_files   = dict( (d, [f for f in glob(join(d, "*.c"))
-                       if (f[:-2] + '.pyx') not in all_cython_files])
-                  for d in source_directory_list + ['.'])
+c_files   = dict( (d, [f for f in glob(os.path.join(d, "*.c"))
+                       if (f[:-2] + '.pyx') not in cython_files_all])
+                  for d in SOURCE_DIR + ['.'])
 
-for d, l in chain(((d, glob(join(d, "*.cxx"))) for d in source_directory_list + ['.']),
-                  ((d, glob(join(d, "*.cpp"))) for d in source_directory_list + ['.'])):
+for d, l in chain(((d, glob(os.path.join(d, "*.cxx"))) for d in SOURCE_DIR + ['.']),
+                  ((d, glob(os.path.join(d, "*.cpp"))) for d in SOURCE_DIR + ['.'])):
     c_files[d] += l
 
+print("C Extension Files Found: \n%s" % ", ".join(sorted(chain(*c_files.values()))))
 
-print "C Extension Files Found: \n%s\n+++++++++++++++++++++" % ", ".join(sorted(chain(*c_files.values())))
 
 # Collect all the python modules
 def get_python_modules(f):
-    d, m = split(f[:f.rfind('.')])
+    d, m = os.path.split(f[:f.rfind('.')])
     return m if len(d) == 0 else d + "." + m
 
 exclude_files = set(["setup.py"])
-python_files = set(chain(* (list(glob(join(d, "*.py")) for d in source_directory_list) + [glob("*.py")]))) 
+python_files = set(chain(* (list(glob(os.path.join(d, "*.py")) for d in SOURCE_DIR) + [glob("*.py")]))) 
 python_files -= exclude_files
 
 python_modules = [get_python_modules(f) for f in python_files]
 
-print "Relevant Python Files Found: \n%s\n+++++++++++++++++++++" % ", ".join(sorted(python_files))
+print("Relevant Python Files Found: \n%s" % ", ".join(sorted(python_files)))
 
-if __name__ == '__main__':
-    # The rest is also shared with the setup.py file, in addition to
-    # this one, so 
 
-    def get_include_dirs(m):
-        return [l.strip() for l in extra_include_dirs + include_paths
-                if len(l.strip()) != 0]
+def get_defined_macros(m):
+    return [('WIN32', '1')] if os.name == 'nt' else []
 
-    def get_library_dirs(m):
-        return [l.strip() for l in extra_library_dirs + lib_paths
-                if len(l.strip()) != 0]
+def get_include_dirs(m):
+    return [l.strip() for l in include_dirs_extra + include_paths
+            if len(l.strip()) != 0]
 
-    def get_libraries(m):
-        return library_includes + (specific_libraries[m] if m in specific_libraries else [])
-    
-    def get_extra_compile_args(m):
-        return compiler_args + (['-g', '-O0', '-DCYTHON_REFNANNY'] if debug_mode_c_code else [])
-    
-    def get_extra_link_args(m):
-        return link_args + (['-g'] if debug_mode_c_code else [])
+def get_library_dirs(m):
+    return [l.strip() for l in library_dirs_extra + lib_paths
+            if len(l.strip()) != 0]
 
-    def get_extra_source_files(m):
-        return extra_sources[m] if m in extra_sources else []
+def get_libraries(m):
+    return library_includes + (library_specific[m] if m in library_specific else [])
 
-    ############################################################
-    # Cython extension lists
+def get_extra_compile_args(m):
+    return COMPILER_ARGS + (['-g', '-O0', '-DCYTHON_REFNANNY'] if DEBUG_C else [])
 
-    def makeExtensionList(d, filelist):
-        ext_modules = []
+def get_extra_link_args(m):
+    return LINK_ARGS + (['-g'] if DEBUG_C else [])
 
-        for f in filelist:
-            f_no_ext = f[:f.rfind('.')]
-            f_mod = split(f_no_ext)[1]
-            modname = "%s.%s" % (d, f_mod) if d != '.' else f_mod
-            
-            ext_modules.append(Extension(
-                    modname,
-                    [f] + get_extra_source_files(modname),
-                    include_dirs = get_include_dirs(modname),
-                    library_dirs = get_library_dirs(modname),
-                    libraries = get_libraries(modname),
-                    extra_compile_args = get_extra_compile_args(modname),
-                    extra_link_args = get_extra_link_args(modname),
-                    ))
+def get_extra_source_files(m):
+    return SOURCES_EXTRA[m] if m in SOURCES_EXTRA else []
 
-        return ext_modules
-
-    ############################################################
-    # Now get all these ready to go
-
+def get_cython_extensions(d, filelist):
     ext_modules = []
 
-    if cython_mode:
-        from Cython.Distutils import build_ext
-
-        ext_modules += list(chain(*list(makeExtensionList(d, l) 
-                                        for d, l in cython_files.iteritems())))
+    for f in filelist:
+        f_no_ext = f[:f.rfind('.')]
+        f_mod = os.path.split(f_no_ext)[1]
+        modname = "%s.%s" % (d, f_mod) if d != '.' else f_mod
         
-        cmdclass = {'build_ext' : build_ext}
-    else:
-        cmdclass = {}
+        ext_modules.append(Extension(
+            modname,
+            [f] + get_extra_source_files(modname),
+            define_macros = get_defined_macros(modname),
+            include_dirs = get_include_dirs(modname),
+            library_dirs = get_library_dirs(modname),
+            libraries = get_libraries(modname),
+            extra_compile_args = get_extra_compile_args(modname),
+            extra_link_args = get_extra_link_args(modname),
+        ))
 
-    ext_modules += list(chain(*list(makeExtensionList(d, l)
-                                    for d, l in c_files.iteritems())))
-    setup(
-        version = version,
-        description = description,
-        author = author, 
-        author_email = author_email,
-        name = name,
-        cmdclass = cmdclass,
-        ext_modules = ext_modules,
-        py_modules = python_modules,
-        scripts = scripts,
-        classifiers = classifiers,
-        url = url,
-        download_url = download_url)
+    return ext_modules
 
+ext_modules = []
+
+if cython_mode:
+    from Cython.Distutils import build_ext #@UnresolvedImport
+
+    ext_modules += list(chain(*list(get_cython_extensions(d, l) for d, l in cython_files.items())))
+    
+    cmdclass = {'build_ext' : build_ext}
+else:
+    cmdclass = {}
+
+ext_modules += list(chain(*list(get_cython_extensions(d, l) for d, l in c_files.items())))
+
+setup(
+    name = NAME,
+    version = VERSION,
+    description = DESCRIPTION,
+    long_description = DESCRIPTION_LONG,
+    author = AUTHOR, 
+    author_email = AUTHOR_EMAIL,
+    cmdclass = cmdclass,
+    ext_modules = ext_modules,
+    py_modules = python_modules,
+    scripts = SCRIPTS,
+    classifiers = CLASSIFIERS,
+    url = URL,
+    download_url = URL_DOWNLOAD
+)
